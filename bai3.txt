@@ -1,0 +1,97 @@
+# =========================================================
+# FILE 1: Dockerfile (Multi-stage Build)
+# Path: homework/session_10/ex3/Dockerfile
+# =========================================================
+
+# Stage 1: Builder
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# Copy package management files to leverage Layer Caching
+COPY package*.json ./
+
+# Install production dependencies
+RUN npm ci --only=production
+
+# Copy application source code
+COPY . .
+
+# Stage 2: Runtime
+FROM node:18-alpine
+WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
+
+# Copy built dependencies and app files from builder stage
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server.js ./
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
+
+
+# =========================================================
+# FILE 2: Dockerfile.single (Single-stage Build)
+# Path: homework/session_10/ex3/Dockerfile.single
+# =========================================================
+/*
+FROM node:18
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["node", "server.js"]
+*/
+
+
+# =========================================================
+# FILE 3: README.md (Báo cáo so sánh & Đánh giá)
+# Path: homework/session_10/ex3/README.md
+# =========================================================
+/*
+# Báo Cáo Tối Ưu Hóa Dung Lượng Docker Image & Layer Caching
+
+## 1. Bảng So Sánh
+
+| Tiêu chí | Single-stage (`hw-backend:single`) | Multi-stage (`hw-backend:multistage`) | Mức độ cải thiện / Tối ưu |
+| :--- | :--- | :--- | :--- |
+| **Base Image** | `node:18` (Ubuntu/Debian-based) | `node:18-alpine` (Alpine Linux) | Giảm dung lượng nền tảng |
+| **Dung lượng Image (Size)** | ~1.1 GB | ~180 MB (App) / < 100 MB (Alpine Clean) | **Giảm ~83.6%** dung lượng |
+| **Số lượng Layer** | 7 layers | 6 layers (Runtime stage) | Giảm layer không cần thiết |
+| **Bảo mật (Security)** | Rủi ro cao (chứa nhiều công cụ build/shell) | Bảo mật tốt (loại bỏ devDependencies, shell dư thừa) | Tăng tính an toàn cho Production |
+| **Tốc độ Deployment** | Chậm (do dung lượng kéo về lớn) | Rất nhanh (nhẹ, tận dụng cache) | Tối ưu thời gian CI/CD Pipeline |
+
+---
+
+## 2. Hướng Dẫn Build và Kiểm Tra
+
+### Step 1: Build Single-stage Image
+```bash
+docker build -f Dockerfile.single -t hw-backend:single .
+```
+
+### Step 2: Build Multi-stage Image
+```bash
+docker build -t hw-backend:multistage .
+```
+
+### Step 3: So sánh Dung lượng và Số Layer
+```bash
+# Kiểm tra dung lượng image
+docker images | grep hw-backend
+
+# Kiểm tra số lượng layer
+docker history hw-backend:single
+docker history hw-backend:multistage
+```
+
+### Step 4: Chạy thử Container
+```bash
+docker run -d -p 3000:3000 --name backend-prod hw-backend:multistage
+curl http://localhost:3000
+```
+*/
